@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <title>Verkehrsordnungswidrigkeitenanzeige bei Halt- und Parkverstößen</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!--
+
+      Dieser Code basiert auf dem ursprünglichen Code von @BerlinCyclist auf https://jsfiddle.net/spy2eh0h/44
+      und des ersten Forks als Gist von @Tordans.
+
+      Initial version by @BerlinCyclist ~2017
+      Wikinaut 20190727-0111 first new running version, OSM only, zero Google code
+      License: WTFPL
+
+      FIXME:
+
+      SHOWSTOPPER/KILLER:
+      embedding inline (base64-coded) images does not work on Android phones w/ K9-Mail, BlueMail
+      Check the image rotation flag
+      add handling of missing EXIF data:
+        missing GPS coordinates -> ping user
+        missing GPS data: use file creation date (if available)
+
+      TODO:
+      allow to send without EXIF images: in this case prompt the user for a manual address location information
+      Possibility to configure the preset texts
+      BOWI-Expert vs. BOWI-light mode (reduced information)
+      Links to Bußgeldkatalog BKat und/oder Tatbestandsnummer
+      add buttons to delete attached images
+
+  -->
+  
+  <style id="compiled-css" type="text/css">
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      /* font-size: 2.2vh; */
+      zoom: 66.67%;
+    }
+
+    h2 {
+      color: #b5050e;
+    }
+
+    input,
+      textarea {
+      width: 32em;
+    }
+
+    ol>li {
+      padding-bottom: 1em;
+    }
+    
+    ul .warntext {
+      list-style-type: disc;
+      list-style-position: outside;
+    }
+    
+  </style>
+
+  <script>
+    window.onload=function(){
+
+      function resizeImageToDataUri(img, width, height) {
+        // create an off-screen canvas
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+
+        // set its dimension to target size
+        canvas.width = width;
+        canvas.height = height;
+        var size = img.src.length;
+        console.log({size, width, height});
+
+        // draw source image into the off-screen canvas:
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // encode image to data-uri with base64 version of compressed image
+        var quality = 0.3;
+        var result = canvas.toDataURL('image/jpeg', quality); // quality = [0.0, 1.0]
+        console.log(result.length);
+        //document.getElementsByTagName('body')[0].appendChild(canvas);
+        return result;
+      }
+
+      function selectElementContents(element) {
+        var range = document.createRange();
+        range.selectNodeContents(element);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+
+      function toDecimal(number) {
+        if (typeof(number) != "undefined") {
+          return number[0].numerator + number[1].numerator /
+          (60 * number[1].denominator) + number[2].numerator / (3600 * number[2].denominator);
+        } else {
+          return 0;
+        }
+      }
+
+      function reverseGeoLocateNominatim(latlng, targetElement ) {
+        // example: https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=52.483&lon=13.35
+        
+        $.getJSON( "https://nominatim.openstreetmap.org/reverse",
+                  { format: 'jsonv2',
+                    lat: latlng.lat,
+                    lon: latlng.lng
+                  })
+          .done( function( response ) {
+            var display_addr = response.display_name; // Basic location information
+            
+            /*
+            var a = response.address;
+            var addr = a.country + ', '
+              + a.postcode + ' ' + a.city + ' (' + a.city_district + '/' + a.suburb + '), '
+              + a.postcode + ' ' + a.village + ' (' + a.city_district + '/' + a.county + '/' + a.state + '), '
+              + a.road + ' ' + a.house_number;
+            */
+          
+            var addr = "";
+            $.each( Object.keys(response.address).reverse(), function( key, keyname ) {
+              addr += keyname + ": " + response.address[keyname] + "<br>"; 
+            });
+ 
+            $(targetElement).html( display_addr + "<br>" + addr );
+
+            // the full results JSON
+            console.log( response );
+          });
+      }
+
+      
+      function reverseGeotagImageAndCreatePreview(imgfile, container) {
+
+        EXIF.getData(imgfile, function() {
+
+          if ( EXIF.getTag(this, 'GPSDateStamp') ) {
+
+            var lat = toDecimal(EXIF.getTag(this, 'GPSLatitude'));
+            var lon = toDecimal(EXIF.getTag(this, 'GPSLongitude'));
+            //console.log(EXIF.getTag(this, 'GPSTimeStamp'));
+            //console.log(EXIF.getTag(this, 'GPSTimeStamp').join(':').replace(/(^|\b|:)([0-9])\b/g, "$10$2"));
+
+            var datetime_s = EXIF.getTag(this, 'GPSDateStamp').replace(/:/g, '-') + " " +
+              EXIF.getTag(this, 'GPSTimeStamp')
+                  .join(':')
+                  .replace(/(^|\b|:)([0-9])\b/g, "$1" + '0' + "$2")
+                  .replace(/\.[0-9]+$/, '') + " UTC";
+
+            var latlng = {
+              lat: lat,
+              lng: lon
+            };
+            //console.log(JSON.stringify(EXIF.getAllTags(this)));
+
+	  } else {
+
+	    console.log( "no EXIF data found." );
+
+            var datetime_s = "No EXIF GPSDateStamp found.";
+            var lat = 0.0;
+	    var lon = 0.0;
+
+	    var latlng = {
+              lat: 0.0,
+              lng: 0.0
+            };
+
+	  }
+
+          var datetime_p = document.createElement("p");
+
+          //var imageWidth = EXIF.getTag(this, 'PixelXDimension') || 1024; //FIXME
+          //var imageHeight = EXIF.getTag(this, 'PixelYDimension') || 200;//FIXME
+          //var newWidth = Math.min(1024, imageWidth);
+
+
+          var reader = new FileReader();
+          reader.readAsDataURL(imgfile);
+          reader.onload = function(event) {
+            var preview_img = document.createElement('img');
+            var zoomLevel = window.getComputedStyle(document.getElementsByTagName('body')[0], null).getPropertyValue('zoom');
+            if (!zoomLevel) {
+              zoomLevel = 1;
+            }
+            preview_img.src = reader.result;
+            preview_img.onload = function() {
+              //console.log(JSON.stringify(preview_img.naturalWidth));
+              var imageWidth = preview_img.naturalWidth;
+              var imageHeight = preview_img.naturalHeight;
+              var newWidth = Math.min(1024, imageWidth);
+              preview_img.width = Math.min(Math.round(window.innerWidth / 2 / zoomLevel), newWidth);
+              preview_img.maxWidth = 320; //FIXME (device width)
+
+              var count = 0;
+              var result = resizeImageToDataUri(this, newWidth, newWidth * imageHeight / imageWidth);
+
+/* was soll das machen?
+              while (result.length < 16*1024 && count++ < 5) {
+                console.log({count: count, "result.length": result.length});
+                result = resizeImageToDataUri(this, newWidth, newWidth * imageHeight / imageWidth);
+              }
+*/
+/*              if (result.length && result.length > 64*1024) { // at least 64 kB
+                this.src = result;
+                this.onload = null;
+                //this.style = "border: 1px solid yellow;";
+              } else {
+                this.style = "border: 1px solid red;";
+              }
+*/
+            }
+            datetime_p.appendChild(preview_img);
+          };
+
+          datetime_p.appendChild(document.createTextNode("Aufnahmeort: "));
+          var loc_elem = document.createElement("span");
+          loc_elem.className = "location";
+          datetime_p.appendChild(loc_elem);
+          reverseGeoLocateNominatim(latlng, loc_elem);
+          // datetime_p.appendChild(document.createElement("br"));
+
+          datetime_p.appendChild(document.createTextNode("GPS: "));
+          var a = document.createElement('a');
+
+          // Using OSM with a marker
+          a.href = 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=19/' + lat + '/' + lon;
+          a.target = '_blank';
+          a.appendChild(document.createTextNode( lat.toFixed(4) + "," + lon.toFixed(4) + " (klicken, um Aufnahmeort in OpenStreetMap anzuzeigen)" ));
+          datetime_p.appendChild(a);
+
+          var datetime = new Date(datetime_s.replace(/ /, 'T').replace(/ UTC/, 'Z'));
+          datetime_p.appendChild(document.createElement("br"));
+
+/*          datetime_p.appendChild(document.createTextNode("Aufnahmezeitpunkt: " + datetime_s + ' (' + datetime.toLocaleString('de-DE', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            timeZoneName: 'short'
+          }) + ')'));
+*/
+
+          datetime_p.appendChild(document.createTextNode("Aufnahmezeitpunkt: " + datetime.toLocaleString('de-DE', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            second: 'numeric',
+            timeZoneName: 'short'
+            })
+	  ));
+
+          datetime_p.appendChild(document.createElement("br"));
+          container.appendChild(datetime_p);
+
+        });
+      }
+
+      $("#imgfiles").change(function() {
+        for (i = 0; i < document.getElementById('imgfiles').files.length; i++) {
+          var container = document.createElement('div');
+          var imgfile = document.getElementById('imgfiles').files[i];
+          if (!imgfile.type.match('image')) {
+            continue;
+          }
+	  var deleteButton = "<span class='deletebutton'>" + wasteBasketSymbol + "</span>";
+	  $( container ).append( deleteButton );
+	  $( container ).find(".deletebutton").click( function() {
+	    $(this).parent().remove();
+	  });
+
+          reverseGeotagImageAndCreatePreview(imgfile, container);
+          this.parentNode.appendChild(container);
+        }
+      });
+
+      function sendMail(address) {
+        var docLoc = document.location;
+        mailWin = window.open('mailto:' + address, 'emailWindow');
+        
+        if (mailWin && mailWin.open && !mailWin.closed) {
+          mailWin.close();
+        } else {
+          docLoc = 'mailto:' + address;
+        }
+        
+      }
+
+      function cleanup(nodeList) {
+        for (i = 0; i < nodeList.length; i++) {
+          //alert(nodeList.length);
+          if (nodeList[i].classList.contains("remove") || nodeList[i].value === null || nodeList[i].value === '') {
+            if (nodeList[i].nextSibling && nodeList[i].nextSibling.tagName === "BR") {
+              nodeList[i].nextSibling.remove();
+            }
+            nodeList[i].remove();
+            i--;
+          } else if (nodeList[i].type === "text" || nodeList[i].type === "select-one" || nodeList[i].type === "textarea") {
+            var elem;
+            if (nodeList[i].name === "Anschriftstrasse") {
+              elem = document.createElement("a");
+              elem.href = "https://www.openstreetmap.org/search?query=" +
+                encodeURI(nodeList[i+1].value) + "," +
+                encodeURI(nodeList[i].value);
+              elem.target = "_blank";
+            } else {
+              elem = document.createElement("span");
+            }
+            elem.innerHTML = nodeList[i].value;
+            nodeList[i].replaceWith(elem);
+            document.getElementsByTagName('body')[0].style.fontSize = "1em";
+            document.getElementsByTagName('body')[0].style.zoom = "reset";
+            i--;
+          }
+        }
+      }
+
+      function clearLocalStorage() {
+        localStorage.clear();
+      }
+
+      function saveLocalStorage(nodeList) {
+        for (i = 0; i < nodeList.length; i++) {
+          localStorage.setItem(nodeList[i].name, nodeList[i].value.trim());
+        }
+      }
+
+      function loadLocalStorage(nodeList) {
+        for (i = 0; i < nodeList.length; i++) {
+          var value = localStorage.getItem(nodeList[i].name);
+          if (value && (nodeList[i].type === "text" || nodeList[i].type === "textarea" || nodeList[i].type === "select-one")) {
+            nodeList[i].value = value.trim();
+          }
+        }
+      }
+
+
+      var greenTickSymbol = '<img src="data:image/x-icon;base64,R0lGODlhDwANANUAAB7MHSrTKkfaR0vaS3jkeJ3rnaHsoanuqa3vrbHvsb7yvsr0ys71zub65uv76/f99yDLHB/OHSDGHCPQISTMICfPJTjUNiDGGiLBGiG/GiHCGynMIyO+GSK7GSK6GSi/HSSyFjzCMFzNUqfioiauFC6zHszuyKndoNTu0CmlEiiiElS5QWC+T+/57SugDyqiES6gFW26WaPUl1KrOeXy4YK9bZzMjMrkwVWlOGuwUt3t1+jz5PT58vv9+v///////yH5BAEAAD8ALAAAAAAPAA0AAAZWwJ9wSBw+ikhhYWNKEhUUUc8pZFRCLeqvYfmgtI8B5lQ0LIiEC6s40kwSwgOgRCvOUp0IwhHgyJA7OC4eEwISK1NIPDkqGRAkN1Q9NS8gMVpCNjA6SUEAOw==">';
+      var attentionSymbol = '<img src="data:image/x-icon;base64,R0lGODlhDgAOAPcAAP/////uAP/mAP/hAOni4uTb28u6usDAgKCAgAAAAP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////yH5BAEAAAAALAAAAAAOAA4AAAhoAAEIFFgAAYICAxMSRHDgwEGFAxkOEOAQIoCCAyYOeKhQYkOKCBRiDJAggYCNBhJKJGkS5MCRLAMIEIAgJYCVMWdWxDgggE+fM1FKFOCzpEydBjMSZTkzqMEDGaNKHeCQgMGrWK8SCAgAOw==">';
+      var wasteBasketSymbol = '<img height=16 width=16 src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABz0lEQVRYhc2XvyuFURjHP/cmSUYpZZBMkkH+AOVkNEoGyaAkgwwGg1EWk82ubEbDYzFLkmTB7Q663SSDJN1keM+r854fvfd1ndv9Ts/7Pb8+nfO8T+eUKCil1ABwDvRZTW/AjIi8FpmvqygAsAqMB9qWgYMik5XSQClVBqaB/pwxu8BYoO0K2M8ZXwcuROQbsjtwBKzkDM7TJHDSRL9DYAOgbJiLLS5eRAtpYAL8JR/+qi4nAHbIAsXUVxqUTFcpNUF+Eraquojcph/2tm+S/Eox9ZuA4G75U+TFnTVsgEobAKrmh30EIYA74EzHSyR58gicam8eGAJqwLH25oBRz1yZNZoFuBSRLQCl1KwGuDe8KQ1QNbzhZgDsI3gGGgGI/9A78BIEEJEG1hn9syoikjF8hScqgG34AJxO7QaIWQucuTtyB2ICOPnVkTsQqxY4NcALELEWODXAC6AVBcBnhgC8ndsJEKMWeOfs2B2IAeDNq5LPVEqNAA+G1QA+ddxLAm56PSR3i2/gw/JSDYpIzV4r9BaokNx4Rox+9mPU55U9HsAtyW3JkfcI9LttDeP+3oI+gXVfDYDAEaTSV61tktdwd8GFv4BrYE9EbkKdfgBbVn197/txVQAAAABJRU5ErkJggg==">';
+
+      $(document).ready(function() {
+        loadLocalStorage(document.getElementsByTagName('input'));
+        loadLocalStorage(document.getElementsByTagName('textarea'));
+        loadLocalStorage(document.getElementsByTagName('select'));
+      });
+      
+      $('input').change(function() {
+        saveLocalStorage(document.getElementsByTagName('input'));
+      });
+      
+      $('textarea').change(function() {
+        saveLocalStorage(document.getElementsByTagName('textarea'));
+      });
+      
+      $('select').change(function() {
+        saveLocalStorage(document.getElementsByTagName('select'));
+      });
+      
+      $('#clearLocalStorage')
+ 	.append( wasteBasketSymbol )
+        .hover(function() {
+          $(this).css('cursor','pointer');
+        })
+        .click(function() {
+       if ( confirm( "Wollen Sie wirklich alle Ihre lokal speicherten Daten löschen?" ) ) {
+            clearLocalStorage();
+            location.reload(true);
+        }
+      });
+        
+      $('#sendMail').click(function() {
+        
+//        if (document.getElementById('imgfiles').files.length > 0 && document.getElementsByClassName('location').length > 0) {
+        if (document.getElementById('imgfiles').files.length > 0 /* && document.getElementsByClassName('location').length > 0 */ ) {
+
+	  cleanup(document.getElementsByClassName('remove'));
+          cleanup(document.getElementsByTagName('input'));
+          cleanup(document.getElementsByTagName('textarea'));
+          cleanup(document.getElementsByTagName('select'));
+
+	  selectElementContents(document.getElementsByTagName('body')[0]);
+          
+          if ( document.execCommand("copy")
+              && confirm( "Der gesamte Anzeigetext mit Foto/s wurde jetzt in den Zwischenspeicher kopiert.\n" +
+                          "Diesen bitte per 'Einfügen' in die E-Mail (geöffnetes Mailprogramm in anderem Fenster) einfügen und an anzeige@bowi.berlin.de senden.\n" +
+                          "Die E-Mail kann vor dem Absenden ggfs. noch verändert bzw. verworfen werden.") ) {
+            sendMail('anzeige@bowi.berlin.de?Subject=Verkehrsordnungswidrigkeitenanzeige%20bei%20Halt-%20und%20Parkverst%C3%B6%C3%9Fen&Body=%5BBitte%20hier%20das%20kopierte%20Formular%20einf%C3%BCgen%5D');
+            location.reload(false);
+            return false;
+          } else {
+            return false;
+          }
+        } else {
+//          if ( confirm( "Bitte fügen Sie wenigstens ein Foto mit aktiviertem Ortungsdienst (GPS) bei!") ) {
+          if ( confirm( "Bitte fügen Sie wenigstens ein Foto bei!") ) {
+              $('#imgfiles').click();
+          };
+          return false;
+        }
+      });
+
+    }
+
+    //]]>
+  </script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+
+</head>
+<body>
+
+  <div id="navElements" class="remove" style="position: fixed; right: 25px; top: 5px; padding: 5px; text-align: center; line-height: 25px; font-size: 20px; border: 0px solid lime; zoom: reset;">
+    <fieldset style="position: relative; float: left; background-color: rgba(190,190,190,0.4); font-size: small; text-shadow: 2px 2px 4px white; padding: 5px;">
+      <legend style="background-color: rgba(210,210,210,0.8); font-size: 80%; text-shadow: 2px 2px 4px white; box-shadow: 2px 2px 4px grey;">In 4 Schritten zur Anzeige</legend>
+      <ol>
+        <li><button onclick="document.getElementsByName('Name')[0].focus(); return false;">Adresse eingeben</button><br></li>
+        <li><button onclick="document.getElementsByName('Verkehrsverstoss')[0].focus(); return false;">Vorwurf auswählen</button><br></li>
+        <li><button onclick="document.getElementById('imgfiles').click(); return false;">Bilder auswählen</button><br></li>
+        <li><button onclick="document.getElementById('sendMail').click(); return false;">E-Mail erzeugen</button><br></li>
+      </ol>
+    </fieldset>
+    <!--
+    <div style="position: relative; float: right; border: 0px solid blue;">
+    <input type="button" value="^^" style="width: 2.5em" onClick="var actionElement = (document.scrollingElement || document.body); actionElement.scrollTop = 0; return false;"><br>
+    <input type="button" value="+" style="width: 2.5em" onClick="var actionElement = document.getElementsByTagName('body')[0]; actionElement.style.zoom = (parseFloat(window.getComputedStyle(actionElement, null).getPropertyValue('zoom')) * 1.2); return false;"><br>
+    <input type="button" value="*" style="width: 2.5em" onClick="var actionElement = document.getElementsByTagName('body')[0]; actionElement.style.zoom = 'reset'; actionElement.style.fontSize = '1em'; return false;"><br>
+    <input type="button" value="-" style="width: 2.5em" onClick="var actionElement = document.getElementsByTagName('body')[0]; actionElement.style.zoom = (parseFloat(window.getComputedStyle(actionElement, null).getPropertyValue('zoom')) * 0.8); return false;"><br>
+    <input type="button" value="v" style="width: 2.5em" onClick="$('body').animate({ scrollTop: $('#sendMail').offset().top }, 500); return false;"><br>
+    <input type="button" value="vv" style="width: 2.5em" onClick="var actionElement = (document.scrollingElement || document.body); actionElement.scrollTop = actionElement.scrollHeight; return false;"><br>
+    </div>
+    -->
+  </div>
+
+
+  <h2>Vereinfachte Verkehrsordnungswidrigkeitenanzeige bei Halt- und Parkverstößen per E-Mail an die Bußgeldstelle der Polizei</h2>
+  <ul class="remove">
+  <li><a href="https://www.berlin.de/polizei/aufgaben/bussgeldstelle/anzeigenerstattung/">https://www.berlin.de/polizei/aufgaben/bussgeldstelle/anzeigenerstattung/</a></li>
+  </ul>
+  <ol>
+    <li>
+      <strong>Anzeigende/Anzeigender = Zeuge/Zeugin:</strong>
+      <p>
+        <input name="Name" placeholder="Anrede Vorname Familienname" type="text" required><br>
+        <input name="Anschriftstrasse" placeholder="Straße Hausnummer" type="text" required><br>
+        <input name="Anschriftort" placeholder="PLZ Ort" type="text" required><br>
+        <input name="Kontakt" placeholder="optional für Rückfragen: Telefonnummer und/oder E-Mail-Adresse" type="text">
+      </p>
+      <ul>
+        <li class="warntext">Meine vorstehend angegebenen Personalien sind zutreffend und — soweit erforderlich — vollständig (<a href="https://dejure.org/gesetze/OWiG/111.html">§111 OWiG</a>).</li>
+        <li class="warntext">Mir ist bewusst, dass ich als Zeugin / Zeuge zur wahrheitsgemäßen Aussage (<a href="https://dejure.org/gesetze/StPO/57.html">§ 57</a> und <a href="https://dejure.org/gesetze/StPO/161a.html">§ 161a StPO</a> i. V. m. <a href="https://dejure.org/gesetze/OWiG/46.html">§ 46 OWiG</a>)
+        und ggf. auch zu einem Erscheinen vor Gericht verpflichtet bin (<a href="https://dejure.org/gesetze/StPO/48.html">§ 48 StPO</a>).</li>
+        <li class="warntext">Ich weiß, dass vorsätzlich falsche Angaben zu angeblichen Ordnungswidrigkeiten eine Straftat (<a href="https://dejure.org/gesetze/StGB/164.html">§ 164 StGB</a>) darstellen können.</li>
+        <li class="warntext">Ich weiß, dass die angezeigte Person bei einer Akteneinsicht auch meinen Namen und vollständige Adresse ersehen kann (<a href="https://dejure.org/gesetze/StPO/147.html">§ 147 StPO</a>).</li>
+      </ul>
+    </li>
+    <br>
+
+    <li>
+      <strong>Angaben zum Verkehrsverstoß:</strong>
+      <p>
+      <tt>(was)&nbsp;</tt><select name="Verkehrsverstoss">
+        <option>Halten</option>
+        <option selected="">Parken (§12(2) StVO: „Wer sein Fahrzeug verlässt oder länger als drei Minuten hält, der parkt.“)</option>
+        </select><br><tt>(wo)&nbsp;&nbsp;</tt><select name="Verkehrsfläche">
+        <option selected="">auf Radfahrstreifen (Breitstrich Z295 0,25 m und Z237)</option>
+        <option>auf Schutzstreifen (Z340: unterbrochene weiße Linie 1:1)</option>
+        <option>auf Radweg (Hochbordradweg mit Z237)</option>
+        <option>auf Gehweg</option>
+        <option>auf Sonderweg</option>
+        <option>in verkehrsberuhigter Z325-Zone außerhalb dafür gekennzeichneten Fläche/n</option>
+        <option>im 5-Meter-Bereich vor/hinter Kreuzungen/Einmündungen</option>
+        <option>vor Grundstücksein/ausfahrten, auf schmalen Fahrbahnen auch ihnen gegenüber</option>
+        <option>vor Bordsteinabsenkungen</option>
+	<option>auf Sperrfläche (Z298)</option>
+        <option>(siehe Anmerkung*)</option>
+        </select><br><tt>(wie)&nbsp;</tt><select name="Qualifizierung">
+        <option>ohne Behinderung</option>
+        <option>mit Behinderung: ich musste anhalten</option>
+        <option>mit Behinderung: ich musste ausweichen</option>
+        <option>mit Behinderung: ich musste absteigen</option>
+        <option selected="">mit Gefährdung: ich musste in den Fliessverkehr ausweichen</option>
+      </select>
+      </p>
+      <p><textarea name="weitereAngaben" rows="3" placeholder="optional: weitere Angaben (z. B. Kennzeichen, Typ, Farbe des Kfz; vorhandene Verkehrszeichen) oder *) Anmerkung zum Verstoß"></textarea></p>
+    </li>
+
+    <li>
+      <strong>Fotos mit Orts- und Zeitangaben:</strong><br>
+      <p class="remove">Bitte fügen Sie aussagekräftige Fotos - wenn möglich mit aktiviertem Ortungsdienst (GPS) - bei. Darauf sollten das Fahrzeug, sein amtliches Kennzeichen und die relevanten Verkehrszeichen ersichtlich 
+sein.<br> Bei zeitabhängigen Verstößen (&gt;3 min; &gt;1 h; &gt;3
+      h) sollte der zeitliche Abstand zwischen erstem und letztem Foto größer sein.</p>
+      <div><input type="file" id="imgfiles" accept="image/jpeg" multiple="multiple" class="remove"><label for="imgfiles" class="remove">(1–6 Fotos)</label>
+      </div>
+    </li>
+
+    <li class="remove">
+      <div id="sendMail" class="remove">Eine Mail mit den oben angezeigten Daten an <a href="mailto:anzeige@bowi.berlin.de?Subject=Verkehrsordnungswidrigkeitenanzeige%20bei%20Halt-%20und%20Parkverst%C3%B6%C3%9Fen&amp;Body=%5BBitte%20das%20ausgef%C3%BCllte%20Formular%20kopieren%20und%20hier%20einf%C3%BCgen%5D" title="Link zur E-Mail">anzeige@bowi.berlin.de</a> (Bußgeldstelle der Berliner Polizei) vorbereiten.</div>
+    </li>
+
+    <li class="remove">
+      <div>Bei Bedarf können Sie <span id="clearLocalStorage">hier klicken</span>, um alle Ihre lokale Daten zu löschen und das Formular so zurückzusetzen.</div>
+    </li>
+  </ol>
+
+
+  <script>
+    // tell the embed parent frame the height of the content
+    if (window.parent && window.parent.parent){
+      window.parent.parent.postMessage(["resultsFrame", {
+        height: document.body.getBoundingClientRect().height,
+        slug: ""
+      }], "*")
+    }
+
+    // always overwrite window.name, in case users try to set it manually
+    window.name = "result"
+  </script>
+
+</body>
+</html>
