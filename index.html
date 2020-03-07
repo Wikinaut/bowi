@@ -34,19 +34,55 @@
   -->
   
   <style id="compiled-css" type="text/css">
+
+    /* Only for smartphones */
+    @media only screen and (max-width: 760px) {
+      #navElements {
+      	display: none;
+      }
+    }
+
     body {
       font-family: Helvetica, Arial, sans-serif;
       /* font-size: 2.2vh; */
-      zoom: 66.67%;
+      margin-left: 1em;
+      margin-right: 1em;
+      margin-bottom: 3em;
+      word-break: break-all;
+    }
+
+    textarea {
+      font-family: Helvetica, Arial, sans-serif;
+    }
+
+    h1 {
+      color: #b5050e;
+      font-size: 1.5em;
     }
 
     h2 {
-      color: #b5050e;
+      font-size: 1.2em;
     }
 
     input,
       textarea {
-      width: 32em;
+      width: 100%;
+    }
+
+    input, select, textarea {
+      height: 2em;
+      width: 100%;
+      font-size: 1em;
+      margin-bottom: 0.35em;
+      margin-top: 0.35em;
+    }
+
+    textarea {
+      min-height: 10em;
+    }
+
+    ol, ul {
+      padding-left: 1em;
     }
 
     ol>li {
@@ -57,11 +93,33 @@
       list-style-type: disc;
       list-style-position: outside;
     }
+
+    p, li, a {
+      line-height: 1.5em;
+    }
     
   </style>
 
   <script>
     window.onload=function(){
+
+      // Author of the police complaint - collapse more information block by default.
+      document.getElementById("author-more-information").style.display = "none";
+      document.getElementById("author-more-information-toggle")
+        .addEventListener("click", toggleVisbility);
+
+      // Toggles the visibility of an element.
+      // Usage: Register this function to a DOM <a> element.
+      // Specify the element which should be toggled in the href.
+      function toggleVisbility(event) {
+        event.preventDefault();
+      	var contentElement = document.querySelector(event.target.attributes.href.textContent)
+        if (contentElement.style.display === "none") {
+          contentElement.style.display = "block";
+        } else {
+          contentElement.style.display = "none";
+        }
+      }
 
       function resizeImageToDataUri(img, width, height) {
         // create an off-screen canvas
@@ -444,20 +502,21 @@
   </div>
 
 
-  <h2>Vereinfachte Verkehrsordnungswidrigkeitenanzeige bei Halt- und Parkverstößen per E-Mail an die Bußgeldstelle der Polizei</h2>
+  <h1>Vereinfachte Verkehrsordnungswidrigkeitenanzeige bei Halt- und Parkverstößen per E-Mail an die Bußgeldstelle der Polizei</h2>
   <ul class="remove">
   <li><a href="https://www.berlin.de/polizei/aufgaben/bussgeldstelle/anzeigenerstattung/">https://www.berlin.de/polizei/aufgaben/bussgeldstelle/anzeigenerstattung/</a></li>
   </ul>
   <ol>
     <li>
-      <strong>Anzeigende/Anzeigender = Zeuge/Zeugin:</strong>
+      <h2>Anzeigende/Anzeigender = Zeuge/Zeugin:</h2>
       <p>
         <input name="Name" placeholder="Anrede Vorname Familienname" type="text" required><br>
         <input name="Anschriftstrasse" placeholder="Straße Hausnummer" type="text" required><br>
         <input name="Anschriftort" placeholder="PLZ Ort" type="text" required><br>
         <input name="Kontakt" placeholder="optional für Rückfragen: Telefonnummer und/oder E-Mail-Adresse" type="text">
       </p>
-      <ul>
+      <a id="author-more-information-toggle" href="#author-more-information">Mehr Informationen ...</a>
+      <ul id="author-more-information">
         <li class="warntext">Meine vorstehend angegebenen Personalien sind zutreffend und — soweit erforderlich — vollständig (<a href="https://dejure.org/gesetze/OWiG/111.html">§111 OWiG</a>).</li>
         <li class="warntext">Mir ist bewusst, dass ich als Zeugin / Zeuge zur wahrheitsgemäßen Aussage (<a href="https://dejure.org/gesetze/StPO/57.html">§ 57</a> und <a href="https://dejure.org/gesetze/StPO/161a.html">§ 161a StPO</a> i. V. m. <a href="https://dejure.org/gesetze/OWiG/46.html">§ 46 OWiG</a>)
         und ggf. auch zu einem Erscheinen vor Gericht verpflichtet bin (<a href="https://dejure.org/gesetze/StPO/48.html">§ 48 StPO</a>).</li>
@@ -468,7 +527,7 @@
     <br>
 
     <li>
-      <strong>Angaben zum Verkehrsverstoß:</strong>
+      <h2>Angaben zum Verkehrsverstoß:</h2>
       <p>
       <tt>(was)&nbsp;</tt><select name="Verkehrsverstoss">
         <option>Halten</option>
@@ -497,7 +556,7 @@
     </li>
 
     <li>
-      <strong>Fotos mit Orts- und Zeitangaben:</strong><br>
+      <h2>Fotos mit Orts- und Zeitangaben:</h2>
       <p class="remove">Bitte fügen Sie aussagekräftige Fotos - wenn möglich mit aktiviertem Ortungsdienst (GPS) - bei. Darauf sollten das Fahrzeug, sein amtliches Kennzeichen und die relevanten Verkehrszeichen ersichtlich 
 sein.<br> Bei zeitabhängigen Verstößen (&gt;3 min; &gt;1 h; &gt;3
       h) sollte der zeitliche Abstand zwischen erstem und letztem Foto größer sein.</p>
@@ -506,14 +565,15 @@ sein.<br> Bei zeitabhängigen Verstößen (&gt;3 min; &gt;1 h; &gt;3
     </li>
 
     <li class="remove">
+      <h2>E-Mail senden</h2>
       <div id="sendMail" class="remove">Eine Mail mit den oben angezeigten Daten an <a href="mailto:anzeige@bowi.berlin.de?Subject=Verkehrsordnungswidrigkeitenanzeige%20bei%20Halt-%20und%20Parkverst%C3%B6%C3%9Fen&amp;Body=%5BBitte%20das%20ausgef%C3%BCllte%20Formular%20kopieren%20und%20hier%20einf%C3%BCgen%5D" title="Link zur E-Mail">anzeige@bowi.berlin.de</a> (Bußgeldstelle der Berliner Polizei) vorbereiten.</div>
     </li>
 
     <li class="remove">
-      <div>Bei Bedarf können Sie <span id="clearLocalStorage">hier klicken</span>, um alle Ihre lokale Daten zu löschen und das Formular so zurückzusetzen.</div>
+      <h2>Eingaben löschen</h2>
+      <div>Bei Bedarf können Sie <a id="clearLocalStorage" href="#">hier klicken</a>, um alle Ihre lokale Daten zu löschen und das Formular so zurückzusetzen.</div>
     </li>
   </ol>
-
 
   <script>
     // tell the embed parent frame the height of the content
