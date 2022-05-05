@@ -36,7 +36,7 @@
       Links to Bußgeldkatalog BKat und/oder Tatbestandsnummer
 
   -->
-  
+
   <style id="compiled-css" type="text/css">
 
     /* Only for smartphones */
@@ -92,7 +92,7 @@
     ol>li {
       padding-bottom: 1em;
     }
-    
+
     ul .warntext {
       list-style-type: disc;
       list-style-position: outside;
@@ -101,7 +101,7 @@
     p, li, a {
       line-height: 1.5em;
     }
-    
+
   </style>
 
   <script>
@@ -142,17 +142,17 @@
 
         // encode image to data-uri with base64 version of compressed image
         // try encoding with decreasing quality until to reach a low image size
-        
+
         var quality = 1.0;
-        
+
         do {
-        
+
         	var result = canvas.toDataURL('image/jpeg', quality); // quality = [0.0, 1.0]
         	console.log( "quality: " + quality + " base64 imagesize: " + result.length);
         	quality = quality - 0.1;
 
         } while ( result.length > 200*1024 && quality > 0.01 );
-        
+
         return result;
       }
 
@@ -175,7 +175,7 @@
 
       function reverseGeoLocateNominatim(latlng, targetElement ) {
         // example: https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=52.483&lon=13.35
-        
+
         $.getJSON( "https://nominatim.openstreetmap.org/reverse",
                   { format: 'jsonv2',
                     lat: latlng.lat,
@@ -183,7 +183,7 @@
                   })
           .done( function( response ) {
             var display_addr_osm = response.display_name; // Basic location information
-            
+
             var a = response.address;
 
             /*
@@ -192,13 +192,13 @@
               + a.postcode + ' ' + a.village + ' (' + a.city_district + '/' + a.county + '/' + a.state + '), '
               + a.road + ' ' + a.house_number;
             */
-          
+
             var addr = "";
             $.each( Object.keys(response.address).reverse(), function( key, keyname ) {
-              addr += keyname + ": " + response.address[keyname] + "<br>"; 
+              addr += keyname + ": " + response.address[keyname] + "<br>";
             });
-            
- 
+
+
             // $(targetElement).html( display_addr + "<br>" + addr );
             $(targetElement).html( a.postcode + ' ' + a.city + '-' + a.suburb + ' (' + a.borough + '), ' + a.road + ' ' + a.house_number + "<br>" );
 
@@ -207,7 +207,7 @@
           });
       }
 
-      
+
       function reverseGeotagImageAndCreatePreview(imgfile, container) {
 
         EXIF.getData(imgfile, function() {
@@ -271,7 +271,7 @@
               preview_img.maxWidth = 320; //FIXME (device width)
 
               var count = 0;
-              
+
               var result = resizeImageToDataUri(this, newWidth, newWidth * imageHeight / imageWidth);
               console.log({"count": count, "result.length": result.length});
 
@@ -351,13 +351,13 @@
       function sendMail(address) {
         var docLoc = document.location;
         mailWin = window.open('mailto:' + address, 'emailWindow');
-        
+
         if (mailWin && mailWin.open && !mailWin.closed) {
           mailWin.close();
         } else {
           docLoc = 'mailto:' + address;
         }
-        
+
       }
 
       function cleanup(nodeList) {
@@ -371,6 +371,8 @@
             i--;
           } else if (nodeList[i].type === "text" || nodeList[i].type === "select-one" || nodeList[i].type === "textarea") {
             var elem;
+
+            /*
             if (nodeList[i].name === "Anschriftstrasse") {
               elem = document.createElement("a");
               elem.href = "https://www.openstreetmap.org/search?query=" +
@@ -380,6 +382,9 @@
             } else {
               elem = document.createElement("span");
             }
+            */
+
+	    elem = document.createElement("span");
             elem.innerHTML = nodeList[i].value;
             nodeList[i].replaceWith(elem);
             document.getElementsByTagName('body')[0].style.fontSize = "1em";
@@ -418,19 +423,19 @@
         loadLocalStorage(document.getElementsByTagName('textarea'));
         loadLocalStorage(document.getElementsByTagName('select'));
       });
-      
+
       $('input').change(function() {
         saveLocalStorage(document.getElementsByTagName('input'));
       });
-      
+
       $('textarea').change(function() {
         saveLocalStorage(document.getElementsByTagName('textarea'));
       });
-      
+
       $('select').change(function() {
         saveLocalStorage(document.getElementsByTagName('select'));
       });
-      
+
       $('#clearLocalStorage')
  	.append( wasteBasketSymbol )
         .hover(function() {
@@ -442,9 +447,9 @@
             location.reload(true);
         }
       });
-        
+
       $('#sendMail').click(function() {
-        
+
         if (document.getElementById('imgfiles').files.length > 0 /* && document.getElementsByClassName('location').length > 0 */ ) {
 
 	  cleanup(document.getElementsByClassName('remove'));
@@ -452,7 +457,7 @@
           cleanup(document.getElementsByTagName('textarea'));
           cleanup(document.getElementsByTagName('select'));
           $('.wastebasketsymbol').hide();
-          
+
 	  var tmp = document.getElementById("author-more-information").style.display;
 	  document.getElementById("author-more-information-toggle").style.display = "none";
 	  document.getElementById("author-more-information").style.display = "block";
@@ -460,9 +465,9 @@
  	  $(document).find('h2').replaceWith(function() {
                 return $(this).text();
  	  });
-      
+
  	  selectElementContents(document.getElementsByTagName('body')[0]);
-                
+
           if ( document.execCommand("copy")
               && confirm( "Der gesamte Anzeigetext mit den Fotos wurde jetzt in den Zwischenspeicher kopiert.\n" +
                           "Diesen bitte per 'Einfügen' in die E-Mail (geöffnetes Mailprogramm in anderem Fenster) einfügen und an anzeige@bowi.berlin.de senden.\n" +
@@ -483,19 +488,43 @@
           };
           return false;
         }
+
+
       });
 
-    }
+
+	var options = {
+		enableHighAccuracy: true,
+		timeout: 5000,
+		maximumAge: 0
+	};
+
+	function success(pos) {
+		reverseGeoLocateNominatim(
+			{ 	lat: pos.coords.latitude,
+				lng: pos.coords.longitude
+			},
+		'#gpsposition'
+				);
+	}
+
+        navigator.geolocation.getCurrentPosition(success, null, options);
+
 
     //]]>
+
+  }
+
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
 
 </head>
-<body>
 
+
+<body>
+  <div id="gpsposition"></div>
   <div id="navElements" class="remove" style="position: fixed; right: 25px; top: 5px; padding: 5px; text-align: center; line-height: 25px; font-size: 20px; border: 0px solid lime; zoom: reset;">
     <fieldset style="position: relative; float: left; background-color: rgba(190,190,190,0.4); font-size: small; text-shadow: 2px 2px 4px white; padding: 5px;">
       <legend style="background-color: rgba(210,210,210,0.8); font-size: 80%; text-shadow: 2px 2px 4px white; box-shadow: 2px 2px 4px grey;">In 4 Schritten zur Anzeige</legend>
@@ -561,13 +590,16 @@
         <option>vor Grundstücksein/ausfahrten, auf schmalen Fahrbahnen auch ihnen gegenüber</option>
         <option>vor Bordsteinabsenkungen</option>
 	<option>auf Sperrfläche (Z298)</option>
+        <option>TBNR 112063 Sie parkten nicht am rechten Fahrbahnrand und behinderten dadurch Andere.</option>
 	      <option>TBNR 141314 Parken länger als 1 Stunde im absoluten Haltverbot (Zeichen 283)</option>
 	      <option>auf offener, unbefestigter Baumscheibe (BaumSchVO §4 Abs.2 Nr.4)</option>
         <option>(siehe Anmerkung*)</option>
         </select><br><tt class='remove'>(wie)&nbsp;</tt><select name="Qualifizierung">
         <option>ohne Behinderung</option>
+        <option>mit Behinderung</option>
         <option>mit Behinderung: ich musste anhalten</option>
         <option>mit Behinderung: ich musste ausweichen</option>
+        <option>mit Behinderung: ich musste schräg über die Kreuzung gehen</option>
         <option>mit Behinderung: ich musste absteigen</option>
         <option selected="">mit Gefährdung: ich musste in den Fließverkehr ausweichen</option>
       </select>
@@ -577,7 +609,7 @@
 
     <li>
       <h2>Fotos mit Orts- und Zeitangaben:</h2>
-      <p class="remove">Bitte fügen Sie aussagekräftige Fotos - wenn möglich mit aktiviertem Ortungsdienst (GPS) - bei. Darauf sollten das Fahrzeug, sein amtliches Kennzeichen und die relevanten Verkehrszeichen ersichtlich 
+      <p class="remove">Bitte fügen Sie aussagekräftige Fotos - wenn möglich mit aktiviertem Ortungsdienst (GPS) - bei. Darauf sollten das Fahrzeug, sein amtliches Kennzeichen und die relevanten Verkehrszeichen ersichtlich
 sein.<br> Bei zeitabhängigen Verstößen (&gt; 3 min; &gt; 1 h; &gt; 3 h) sollte der zeitliche Abstand zwischen erstem und letztem Foto größer sein.</p>
       <div><input type="file" id="imgfiles" accept="image/jpeg" multiple="multiple" class="remove"><label for="imgfiles" class="remove">(1–6 Fotos)</label>
       </div>
@@ -605,6 +637,8 @@ sein.<br> Bei zeitabhängigen Verstößen (&gt; 3 min; &gt; 1 h; &gt; 3 h) sollt
 
     // always overwrite window.name, in case users try to set it manually
     window.name = "result"
+
+
   </script>
 
 </body>
