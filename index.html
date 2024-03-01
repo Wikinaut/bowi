@@ -209,28 +209,23 @@
       }
 
 
-      function reverseGeotagImageAndCreatePreview(imgfile, container) {
+      async function reverseGeotagImageAndCreatePreview(imgfile, container) {
 
-        EXIF.getData(imgfile, function() {
+	const ex = await ExifReader.load( imgfile );
+	// console.log( ex );
+        // console.log("Lat: "+ex.GPSLatitude.description);
+        // console.log("Lon: "+ex.GPSLongitude.description);
 
-          if ( EXIF.getTag(this, 'GPSDateStamp') ) {
+          if ( typeof ex.DateTimeOriginal != "undefined" ) {
 
-            var lat = toDecimal(EXIF.getTag(this, 'GPSLatitude'));
-            var lon = toDecimal(EXIF.getTag(this, 'GPSLongitude'));
-            //console.log(EXIF.getTag(this, 'GPSTimeStamp'));
-            //console.log(EXIF.getTag(this, 'GPSTimeStamp').join(':').replace(/(^|\b|:)([0-9])\b/g, "$10$2"));
-
-            var datetime_s = EXIF.getTag(this, 'GPSDateStamp').replace(/:/g, '-') + " " +
-              EXIF.getTag(this, 'GPSTimeStamp')
-                  .join(':')
-                  .replace(/(^|\b|:)([0-9])\b/g, "$1" + '0' + "$2")
-                  .replace(/\.[0-9]+$/, '') + " UTC";
+            var lat = ex.GPSLatitude.description;
+            var lon = ex.GPSLongitude.description;
+            var datetime_s = ex.DateTimeOriginal.description;
 
             var latlng = {
               lat: lat,
               lng: lon
             };
-            //console.log(JSON.stringify(EXIF.getAllTags(this)));
 
 	  } else {
 
@@ -246,6 +241,7 @@
             };
 
 	  }
+
 
           var datetime_p = document.createElement("p");
 
@@ -310,7 +306,9 @@
           a.appendChild(document.createTextNode( lat.toFixed(4) + "," + lon.toFixed(4) + " (klicken, um Aufnahmeort in OpenStreetMap anzuzeigen)" ));
           datetime_p.appendChild(a);
 
-          var datetime = new Date(datetime_s.replace(/ /, 'T').replace(/ UTC/, 'Z'));
+          // var datetime = new Date(datetime_s.replace(/ /, 'T').replace(/ UTC/, 'Z'));
+          datetime = datetime_s;
+
           datetime_p.appendChild(document.createElement("br"));
 
           datetime_p.appendChild(document.createTextNode("Aufnahmezeitpunkt: " + datetime.toLocaleString('de-DE', {
@@ -328,8 +326,9 @@
           datetime_p.appendChild(document.createElement("br"));
           container.appendChild(datetime_p);
 
-        });
+
       }
+
 
       $("#imgfiles").change(function() {
         for (i = 0; i < document.getElementById('imgfiles').files.length; i++) {
@@ -520,7 +519,7 @@
   </script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+  <script src="./exif-reader.js"></script>
 
 </head>
 
